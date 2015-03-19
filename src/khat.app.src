@@ -6,8 +6,7 @@
   {applications, [
     kernel,
     stdlib,
-    lager,
-    cowboy
+    lager
   ]},
   {mod, { khat_app, []}},
   {env, []}
