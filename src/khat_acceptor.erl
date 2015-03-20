@@ -5,7 +5,7 @@
 %%% @end
 %%% Created : 19. mar 2015 17:05
 %%%-------------------------------------------------------------------
--module(khat_listener).
+-module(khat_acceptor).
 
 -behaviour(gen_server).
 
@@ -14,10 +14,7 @@
 -include("../include/khat_logger.hrl").
 
 %% API
--export([
-    start_link/0,
-    get_socket/0
-]).
+-export([start_link/0]).
 
 %% gen_server callbacks
 -export([
@@ -44,10 +41,6 @@
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
--spec get_socket() -> {ok, ListenSocket :: port()}.
-get_socket() ->
-    gen_server:call(?MODULE, get_socket).
-
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
@@ -64,19 +57,12 @@ get_socket() ->
 %% @end
 %%--------------------------------------------------------------------
 -spec(init(Args :: term()) ->
-    {ok, State :: #khat_listener{}} | {ok, State :: #khat_listener{}, timeout() | hibernate} |
+    {ok, State :: #khat_acceptor{}} | {ok, State :: #khat_acceptor{}, timeout() | hibernate} |
     {stop, Reason :: term()} | ignore).
 init([]) ->
-    Port = khat_config:get_value(port, ?DEFAULT_PORT),
-    Opts = [list, {packet, 2}, {reuseaddr, true}, {keepalive, true}, {active, false}],
-    case gen_tcp:listen(Port, Opts) of
-        {ok, ListenSocket} ->
-            ?INFO("Started listening on TCP port ~p", [Port]),
-            {ok, #khat_listener{port = Port, listen_socket = ListenSocket}};
-        {error, Reason} ->
-            ?ERROR("Couldn't start TCP listener: ~p", [Reason]),
-            {stop, Reason}
-    end.
+    {ok, ListenSocket} = khat_listener:get_socket(),
+    ok = accept_connections(),
+    {ok, #khat_acceptor{listen_socket = ListenSocket}}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -86,16 +72,15 @@ init([]) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec(handle_call(Request :: term(), From :: {pid(), Tag :: term()},
-    State :: #khat_listener{}) ->
-    {reply, Reply :: term(), NewState :: #khat_listener{}} |
-    {reply, Reply :: term(), NewState :: #khat_listener{}, timeout() | hibernate} |
-    {noreply, NewState :: #khat_listener{}} |
-    {noreply, NewState :: #khat_listener{}, timeout() | hibernate} |
-    {stop, Reason :: term(), Reply :: term(), NewState :: #khat_listener{}} |
-    {stop, Reason :: term(), NewState :: #khat_listener{}}).
-handle_call(get_socket, _From, State) ->
-    #khat_listener{listen_socket = ListenSocket} = State,
-    {reply, {ok, ListenSocket}, State}.
+    State :: #khat_acceptor{}) ->
+    {reply, Reply :: term(), NewState :: #khat_acceptor{}} |
+    {reply, Reply :: term(), NewState :: #khat_acceptor{}, timeout() | hibernate} |
+    {noreply, NewState :: #khat_acceptor{}} |
+    {noreply, NewState :: #khat_acceptor{}, timeout() | hibernate} |
+    {stop, Reason :: term(), Reply :: term(), NewState :: #khat_acceptor{}} |
+    {stop, Reason :: term(), NewState :: #khat_acceptor{}}).
+handle_call(_Request, _From, State) ->
+    {reply, error, State}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -104,13 +89,24 @@ handle_call(get_socket, _From, State) ->
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec(handle_cast(Request :: term(), State :: #khat_listener{}) ->
-    {noreply, NewState :: #khat_listener{}} |
-    {noreply, NewState :: #khat_listener{}, timeout() | hibernate} |
-    {stop, Reason :: term(), NewState :: #khat_listener{}}).
-handle_cast(Request, State) ->
-    ?WARN("Received unexpected request ~p", [Request]),
-    {noreply, State}.
+-spec(handle_cast(Request :: term(), State :: #khat_acceptor{}) ->
+    {noreply, NewState :: #khat_acceptor{}} |
+    {noreply, NewState :: #khat_acceptor{}, timeout() | hibernate} |
+    {stop, Reason :: term(), NewState :: #khat_acceptor{}}).
+handle_cast(accept, State) ->
+    #khat_acceptor{listen_socket = ListenSocket} = State,
+    case gen_tcp:accept(ListenSocket) of
+        {ok, Socket} ->
+            ?DEBUG("Accepted connection from client ~p", [inet:port(Socket)]),
+            {ok, Pid} = khat_client_sup:add_child(Socket),
+            ok = gen_tcp:controlling_process(Socket, Pid),
+            ok = inet:setopts(Socket, [{active, true}]),
+            ok = accept_connections(),
+            {noreply, State};
+        {error, Reason} ->
+            ?ERROR("Couldn't accept connection on socket ~p: ~p", [ListenSocket, Reason]),
+            {stop, Reason, State}
+    end.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -122,10 +118,10 @@ handle_cast(Request, State) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
--spec(handle_info(Info :: timeout() | term(), State :: #khat_listener{}) ->
-    {noreply, NewState :: #khat_listener{}} |
-    {noreply, NewState :: #khat_listener{}, timeout() | hibernate} |
-    {stop, Reason :: term(), NewState :: #khat_listener{}}).
+-spec(handle_info(Info :: timeout() | term(), State :: #khat_acceptor{}) ->
+    {noreply, NewState :: #khat_acceptor{}} |
+    {noreply, NewState :: #khat_acceptor{}, timeout() | hibernate} |
+    {stop, Reason :: term(), NewState :: #khat_acceptor{}}).
 handle_info(Info, State) ->
     ?WARN("Received unexpected message ~p", [Info]),
     {noreply, State}.
@@ -142,9 +138,9 @@ handle_info(Info, State) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec(terminate(Reason :: (normal | shutdown | {shutdown, term()} | term()),
-    State :: #khat_listener{}) -> term()).
+    State :: #khat_acceptor{}) -> term()).
 terminate(Reason, _State) ->
-    ?WARN("TCP listener terminating with ~p reason", [Reason]),
+    ?WARN("TCP acceptor terminating with ~p reason", [Reason]),
     ok.
 
 %%--------------------------------------------------------------------
@@ -155,12 +151,16 @@ terminate(Reason, _State) ->
 %% @spec code_change(OldVsn, State, Extra) -> {ok, NewState}
 %% @end
 %%--------------------------------------------------------------------
--spec(code_change(OldVsn :: term() | {down, term()}, State :: #khat_listener{},
+-spec(code_change(OldVsn :: term() | {down, term()}, State :: #khat_acceptor{},
     Extra :: term()) ->
-    {ok, NewState :: #khat_listener{}} | {error, Reason :: term()}).
+    {ok, NewState :: #khat_acceptor{}} | {error, Reason :: term()}).
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+-spec accept_connections() -> ok.
+accept_connections() ->
+    gen_server:cast(self(), accept).

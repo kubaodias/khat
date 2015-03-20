@@ -5,12 +5,15 @@
 %%% @end
 %%% Created : 19. mar 2015 17:26
 %%%-------------------------------------------------------------------
--module(khat_sup).
+-module(khat_acceptor_sup).
 
 -behaviour(supervisor).
 
 %% Includes
 -include("../include/khat_logger.hrl").
+
+%% Definitions
+-define(DEFAULT_ACCEPTOR_COUNT, 15).
 
 %% API
 -export([start_link/0]).
@@ -30,11 +33,11 @@ start_link() ->
 %% ===================================================================
 
 init([]) ->
-    SupFlags = {one_for_all, 5, 60},
-    ?DEBUG("Starting khat supervisor..."),
+    SupFlags = {one_for_one, 10, 60},
+    AcceptorCount = khat_config:get_value(acceptors, ?DEFAULT_ACCEPTOR_COUNT),
+    ?DEBUG("Starting khat acceptor supervisor..."),
     {ok, { SupFlags, [
-        {khat_client_sup, {khat_client_sup, start_link, []}, permanent, infinity, supervisor, [khat_client_sup]},
-        {khat_listener, {khat_listener, start_link, []}, permanent, 10000, worker, [khat_listener]},
-        {khat_acceptor_sup, {khat_acceptor_sup, start_link, []}, permanent, infinity, supervisor, [khat_acceptor_sup]}
+        {{khat_acceptor, N}, {khat_acceptor, start_link, []}, permanent, 10000, worker, [khat_acceptor]}
+            || N <- lists:seq(1, AcceptorCount)
     ]} }.
 

@@ -39,11 +39,10 @@
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec(start_link(ClientName :: khat_client_name()) ->
+-spec(start_link(Socket :: port()) ->
     {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
-start_link(ClientName) ->
-    ProcessName = process_name(ClientName),
-    gen_server:start_link({local, ProcessName}, ?MODULE, [ClientName], []).
+start_link(Socket) ->
+    gen_server:start_link(local, ?MODULE, [Socket], []).
 
 -spec send(Pid :: pid(), Data :: binary()) -> ok.
 send(Pid, Data) ->
@@ -67,9 +66,10 @@ send(Pid, Data) ->
 -spec(init(Args :: term()) ->
     {ok, State :: #khat_client{}} | {ok, State :: #khat_client{}, timeout() | hibernate} |
     {stop, Reason :: term()} | ignore).
-init([ClientName]) ->
-    ?INFO("Started client process for ~s", [ClientName]),
-    {ok, #khat_client{name = ClientName}}.
+init([Socket]) ->
+    ok = khat_group:subscribe(?GLOBAL_GROUP),
+    State = #khat_client{socket = Socket},
+    {ok, State}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -124,9 +124,9 @@ handle_cast({send, Data}, State) ->
     {noreply, NewState :: #khat_client{}} |
     {noreply, NewState :: #khat_client{}, timeout() | hibernate} |
     {stop, Reason :: term(), NewState :: #khat_client{}}).
-handle_info({tcp, Socket, Data}, State) when Socket =:= State#khat_client.socket ->
+handle_info({tcp, Socket, Data}, State) ->
     {noreply, State};
-handle_info({tcp_closed, Socket}, State) when Socket =:= State#khat_client.socket ->
+handle_info({tcp_closed, _Socket}, State) ->
     {stop, {shutdown, tcp_closed}, State}.
 
 %%--------------------------------------------------------------------
@@ -142,6 +142,10 @@ handle_info({tcp_closed, Socket}, State) when Socket =:= State#khat_client.socke
 %%--------------------------------------------------------------------
 -spec(terminate(Reason :: (normal | shutdown | {shutdown, term()} | term()),
     State :: #khat_client{}) -> term()).
+terminate({shutdown, tcp_closed}, State) ->
+    #khat_client{name = ClientName} = State,
+    ?DEBUG("Client ~s terminating with tcp_closed reason", [ClientName]),
+    ok;
 terminate(Reason, State) ->
     #khat_client{name = ClientName} = State,
     ?WARN("Client ~s terminating with ~p reason", [ClientName, Reason]),
@@ -164,7 +168,3 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-
--spec process_name(ClientName :: khat_client_name()) -> atom().
-process_name(ClientName) ->
-    khat_utils:list_to_atom("client_" ++ ClientName).

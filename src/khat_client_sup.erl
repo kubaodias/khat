@@ -30,9 +30,10 @@
 start_link() ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
--spec add_child(Name :: atom()) -> {ok, Pid :: pid()} | ignore | {error, Reason :: term()}.
-add_child(Name) ->
-    supervisor:start_child(?MODULE, {Name, {khat_client_worker, start_link, [Name]},
+-spec add_child(Socket :: port()) -> {ok, Pid :: pid()} | ignore | {error, Reason :: term()}.
+add_child(Socket) ->
+    Id = khat_utils:get_timestamp(),
+    supervisor:start_child(?MODULE, {Id, {khat_client_worker, start_link, [Socket]},
                                      transient, 10000, worker, [khat_client_worker]}).
 
 %% ===================================================================
