@@ -16,7 +16,7 @@
 
 %% API
 -export([
-    start_link/1,
+    start/1,
     stop/1,
     subscribe/1,
     unsubscribe/1,
@@ -44,11 +44,11 @@
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec(start_link(GroupName :: khat_group_name()) ->
+-spec(start(GroupName :: khat_group_name()) ->
     {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
-start_link(GroupName) ->
+start(GroupName) ->
     ProcessName = group_name(GroupName),
-    gen_server:start_link({local, ProcessName}, ?MODULE, [GroupName, ProcessName], []).
+    gen_server:start({local, ProcessName}, ?MODULE, [GroupName, ProcessName], []).
 
 stop(GroupName) ->
     ProcessName = group_name(GroupName),
@@ -115,7 +115,7 @@ init([GroupName, ProcessName]) ->
     {stop, Reason :: term(), Reply :: term(), NewState :: #khat_group{}} |
     {stop, Reason :: term(), NewState :: #khat_group{}}).
 handle_call(stop, _From, State) ->
-    {stop, normal, ok, State}.
+    {stop, shutdown, ok, State}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -130,13 +130,13 @@ handle_call(stop, _From, State) ->
     {stop, Reason :: term(), NewState :: #khat_group{}}).
 handle_cast({subscribe, Pid}, State) ->
     #khat_group{name = GroupName, tab = Tid} = State,
-    ?INFO("Group ~s - subscribe client ~p", [GroupName, Pid]),
+    ?DEBUG("Group ~s - subscribe client ~p", [GroupName, Pid]),
     Ref = erlang:monitor(process, Pid),
     true = ets:insert(Tid, {Pid, Ref}),
     {noreply, State};
 handle_cast({unsubscribe, Pid}, State) ->
     #khat_group{name = GroupName, tab = Tid} = State,
-    ?INFO("Group ~s - unsubscribe client ~p", [GroupName, Pid]),
+    ?DEBUG("Group ~s - unsubscribe client ~p", [GroupName, Pid]),
     true = ets:delete(Tid, Pid),
     {noreply, State};
 handle_cast({broadcast, Data}, State) ->
@@ -206,7 +206,7 @@ group_name(GroupName) ->
 
 -spec ensure_started(GroupName :: khat_group_name()) -> {ok, Pid :: pid()}.
 ensure_started(GroupName) ->
-    case start_link(GroupName) of
+    case start(GroupName) of
         {ok, Pid} ->
             {ok, Pid};
         {error, {already_started, Pid}} ->

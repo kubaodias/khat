@@ -68,7 +68,7 @@ get_socket() ->
     {stop, Reason :: term()} | ignore).
 init([]) ->
     Port = khat_config:get_value(port, ?DEFAULT_PORT),
-    Opts = [list, {packet, 2}, {reuseaddr, true}, {keepalive, true}, {active, false}],
+    Opts = [binary, {reuseaddr, true}, {keepalive, true}, {active, false}],
     case gen_tcp:listen(Port, Opts) of
         {ok, ListenSocket} ->
             ?INFO("Started listening on TCP port ~p", [Port]),

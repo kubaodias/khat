@@ -22,6 +22,15 @@ parse_msg([$\\,$s,$u,$b,$s,$c,$r,$i,$b,$e,$\\ | ChannelName]) ->
     {subscribe, ChannelName};
 parse_msg([$\\,$u,$n,$s,$u,$b,$s,$c,$r,$i,$b,$e,$\\ | ChannelName]) ->
     {unsubscribe, ChannelName};
+parse_msg([$\\,$c,$h,$a,$n,$n,$e,$l,$\\ | ChannelNameAndData]) ->
+    case string:chr(ChannelNameAndData, $\\) of
+        0 ->
+            error;
+        N ->
+            ChannelName = string:left(ChannelNameAndData, N - 1),
+            Data = string:right(ChannelNameAndData, length(ChannelNameAndData) - N),
+            {{channel, ChannelName}, Data}
+    end;
 parse_msg([$\\ | _InvalidType]) ->
     error;
 parse_msg(Msg) ->

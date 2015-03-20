@@ -15,7 +15,7 @@
 
 -type khat_client_name()    :: nonempty_string().
 -type khat_group_name()     :: nonempty_string().
--type khat_msg_type()       :: msg | register | subscribe | unsubscribe.
+-type khat_msg_type()       :: msg | register | subscribe | unsubscribe | {channel, khat_group_name()}.
 
 -record(khat_listener, {
     port    :: pos_integer(),
@@ -28,7 +28,8 @@
 
 -record(khat_client, {
     name    :: khat_client_name() | undefined,
-    socket  :: port()
+    socket  :: port(),
+    buffer = <<>>  :: binary()
 }).
 
 -record(khat_group, {

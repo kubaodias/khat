@@ -24,6 +24,8 @@ parse_msg_test() ->
     ?assertEqual({register, "John Doe"}, khat_protocol:parse_msg("\\register\\John Doe")),
     ?assertEqual({subscribe, "News"}, khat_protocol:parse_msg("\\subscribe\\News")),
     ?assertEqual({unsubscribe, "Weather Channel"}, khat_protocol:parse_msg("\\unsubscribe\\Weather Channel")),
+    ?assertEqual({{channel, "News"}, "This is it!"}, khat_protocol:parse_msg("\\channel\\News\\This is it!")),
+    ?assertEqual(error, khat_protocol:parse_msg("\\channel=Weather Channel")),
     ?assertEqual(error, khat_protocol:parse_msg("\\unregister\\user")).
 
 %%%===================================================================

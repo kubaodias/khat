@@ -16,6 +16,8 @@
 %% API
 -export([
     start_link/1,
+    start/1,
+    stop/1,
     send/2
 ]).
 
@@ -42,7 +44,16 @@
 -spec(start_link(Socket :: port()) ->
     {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
 start_link(Socket) ->
-    gen_server:start_link(local, ?MODULE, [Socket], []).
+    gen_server:start_link(?MODULE, [Socket], []).
+
+-spec(start(Socket :: port()) ->
+    {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
+start(Socket) ->
+    gen_server:start(?MODULE, [Socket], []).
+
+-spec stop(Pid :: pid()) -> ok.
+stop(Pid) ->
+    gen_server:call(Pid, stop).
 
 -spec send(Pid :: pid(), Data :: binary()) -> ok.
 send(Pid, Data) ->
@@ -86,8 +97,8 @@ init([Socket]) ->
     {noreply, NewState :: #khat_client{}, timeout() | hibernate} |
     {stop, Reason :: term(), Reply :: term(), NewState :: #khat_client{}} |
     {stop, Reason :: term(), NewState :: #khat_client{}}).
-handle_call(_Request, _From, State) ->
-    {reply, ok, State}.
+handle_call(stop, _From, State) ->
+    {stop, shutdown, ok, State}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -124,8 +135,10 @@ handle_cast({send, Data}, State) ->
     {noreply, NewState :: #khat_client{}} |
     {noreply, NewState :: #khat_client{}, timeout() | hibernate} |
     {stop, Reason :: term(), NewState :: #khat_client{}}).
-handle_info({tcp, Socket, Data}, State) ->
-    {noreply, State};
+handle_info({tcp, _Socket, Data}, State) ->
+    #khat_client{buffer = PrevData} = State,
+    {ok, NewState} = process_data(State#khat_client{buffer = <<PrevData/binary, Data/binary>>}),
+    {noreply, NewState};
 handle_info({tcp_closed, _Socket}, State) ->
     {stop, {shutdown, tcp_closed}, State}.
 
@@ -168,3 +181,52 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+-spec process_data(State :: #khat_client{}) -> {ok, #khat_client{}}.
+process_data(State) when State#khat_client.buffer =:= <<>> ->
+    {ok, State};
+process_data(State) ->
+    #khat_client{buffer = BufferData} = State,
+    case binary:split(BufferData, <<"\r\n">>, []) of
+        [BufferData] ->
+            % wait for the next data in the buffer
+            {ok, State};
+        Msgs when is_list(Msgs) ->
+            % last message can be incomplete
+            {WholeMsgs, LastMsg} = lists:split(length(Msgs) - 1, Msgs),
+            {ok, NewState} = process_messages(WholeMsgs, State),
+            process_data(NewState#khat_client{buffer = list_to_binary(LastMsg)})
+    end.
+
+-spec process_messages(Msgs :: [binary()], State :: #khat_client{}) -> {ok, #khat_client{}}.
+process_messages([], State) ->
+    {ok, State};
+process_messages([BinMsg | RestOfMsgs], State) ->
+    #khat_client{name = ClientName, socket = Socket} = State,
+    Msg = binary_to_list(BinMsg),
+    NewState =
+        case khat_protocol:parse_msg(Msg) of
+            {register, NewClientName} ->
+                ?INFO("Register name ~s", [NewClientName]),
+                State#khat_client{name = NewClientName};
+            {subscribe, ChannelName} ->
+                ok = khat_group:subscribe(ChannelName),
+                State;
+            {unsubscribe, ChannelName} ->
+                ok = khat_group:unsubscribe(ChannelName),
+                State;
+            {_, _ChannelMsg} when ClientName =:= undefined ->
+                _ = gen_tcp:send(Socket, <<"Unregistered\r\n">>),
+                State;
+            {msg, Msg} ->
+                ok = khat_group:broadcast(?GLOBAL_GROUP, list_to_binary([ClientName, ": ", Msg, "\r\n"])),
+                State;
+            {{channel, Channel}, ChannelMsg} ->
+                ok = khat_group:broadcast(Channel, list_to_binary([ClientName, ": ", ChannelMsg, "\r\n"])),
+                State;
+            error ->
+                ?ERROR("~s - received invalid message ~s", [ClientName, Msg]),
+                _ = gen_tcp:send(Socket, <<"Invalid command\r\n">>),
+                State
+        end,
+    process_messages(RestOfMsgs, NewState).

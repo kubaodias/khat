@@ -23,7 +23,7 @@ khat_group_test_() ->
     {foreach,
         fun() ->
             ?MOCK(khat_client_worker, [{send, fun(Pid, Data) -> Pid ! Data, ok end}]),
-            {ok, PID} = khat_group:start_link(?GROUP_NAME),
+            {ok, PID} = khat_group:start(?GROUP_NAME),
             PID
         end,
         fun(PID) ->

@@ -39,7 +39,7 @@
 -spec(start_link() ->
     {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
 start_link() ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+    gen_server:start_link(?MODULE, [], []).
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -97,8 +97,11 @@ handle_cast(accept, State) ->
     #khat_acceptor{listen_socket = ListenSocket} = State,
     case gen_tcp:accept(ListenSocket) of
         {ok, Socket} ->
-            ?DEBUG("Accepted connection from client ~p", [inet:port(Socket)]),
-            {ok, Pid} = khat_client_sup:add_child(Socket),
+            {ok, PeerName} = inet:peername(Socket),
+            ?DEBUG("Accepted connection from client ~p", [PeerName]),
+            % it isn't necessary to start client worker under the supervisor - it isn't restarted
+            %% {ok, Pid} = khat_client_sup:add_child(Socket),
+            {ok, Pid} = khat_client_worker:start(Socket),
             ok = gen_tcp:controlling_process(Socket, Pid),
             ok = inet:setopts(Socket, [{active, true}]),
             ok = accept_connections(),
