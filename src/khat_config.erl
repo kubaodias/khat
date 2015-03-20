@@ -13,9 +13,11 @@
     get_value/2
 ]).
 
+-spec get_value(Key :: atom()) -> any().
 get_value(Key) ->
     get_value(Key, undefined).
 
+-spec get_value(Key :: atom(), Default :: any()) -> any().
 get_value(Key, Default) ->
     AppEnv = application:get_all_env(khat),
     proplists:get_value(AppEnv, Key, Default).

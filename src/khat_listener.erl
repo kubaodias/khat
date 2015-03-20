@@ -10,8 +10,8 @@
 -behaviour(gen_server).
 
 %% Includes
--include("../include/logger.hrl").
 -include("../include/khat.hrl").
+-include("../include/khat_logger.hrl").
 
 %% API
 -export([start_link/0]).
@@ -134,7 +134,8 @@ handle_info({tcp, Socket, _Data}, State) when Socket =:= State#khat_listener.soc
 %%--------------------------------------------------------------------
 -spec(terminate(Reason :: (normal | shutdown | {shutdown, term()} | term()),
     State :: #khat_listener{}) -> term()).
-terminate(_Reason, _State) ->
+terminate(Reason, _State) ->
+    ?WARN("TCP listener terminating with ~p reason", [Reason]),
     ok.
 
 %%--------------------------------------------------------------------

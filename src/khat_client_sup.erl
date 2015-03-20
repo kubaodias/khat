@@ -10,7 +10,7 @@
 -behaviour(supervisor).
 
 %% Includes
--include("../include/logger.hrl").
+-include("../include/khat_logger.hrl").
 
 %% API
 -export([
@@ -33,7 +33,7 @@ start_link() ->
 -spec add_child(Name :: atom()) -> {ok, Pid :: pid()} | ignore | {error, Reason :: term()}.
 add_child(Name) ->
     supervisor:start_child(?MODULE, {Name, {khat_client_worker, start_link, [Name]},
-        transient, 10000, worker, [khat_client_worker]}).
+                                     transient, 10000, worker, [khat_client_worker]}).
 
 %% ===================================================================
 %% Supervisor callbacks

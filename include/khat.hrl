@@ -12,7 +12,7 @@
 -define(DEFAULT_PORT, 6667).
 
 -type khat_client_name()    :: nonempty_string().
--type khat_channel_name()   :: nonempty_string().
+-type khat_group_name()     :: nonempty_string().
 
 -record(khat_listener, {
     port    :: pos_integer(),
@@ -24,9 +24,9 @@
     socket  :: port()
 }).
 
--record(khat_channel, {
-    name    :: khat_channel_name(),
-    clients = [] :: [pid()]
+-record(khat_group, {
+    name    :: khat_group_name(),
+    tab     :: ets:tid()
 }).
 
 

@@ -10,8 +10,8 @@
 -behaviour(gen_server).
 
 %% Includes
--include("../include/logger.hrl").
 -include("../include/khat.hrl").
+-include("../include/khat_logger.hrl").
 
 %% API
 -export([
@@ -124,8 +124,10 @@ handle_cast({send, Data}, State) ->
     {noreply, NewState :: #khat_client{}} |
     {noreply, NewState :: #khat_client{}, timeout() | hibernate} |
     {stop, Reason :: term(), NewState :: #khat_client{}}).
+handle_info({tcp, Socket, Data}, State) when Socket =:= State#khat_client.socket ->
+    {noreply, State};
 handle_info({tcp_closed, Socket}, State) when Socket =:= State#khat_client.socket ->
-    {noreply, State}.
+    {stop, {shutdown, tcp_closed}, State}.
 
 %%--------------------------------------------------------------------
 %% @private

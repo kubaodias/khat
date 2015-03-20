@@ -17,5 +17,5 @@ list_to_atom(List) ->
     try
         list_to_existing_atom(List)
     catch error:badarg ->
-        list_to_atom(List)
+        erlang:list_to_atom(List)
     end.

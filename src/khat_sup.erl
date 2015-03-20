@@ -10,7 +10,7 @@
 -behaviour(supervisor).
 
 %% Includes
--include("../include/logger.hrl").
+-include("../include/khat_logger.hrl").
 
 %% API
 -export([start_link/0]).

@@ -6,8 +6,8 @@
 %%% Created : 19. mar 2015 17:07
 %%%-------------------------------------------------------------------
 
--ifndef(logger_hrl).
--define(logger_hrl, true).
+-ifndef(khat_logger_hrl).
+-define(khat_logger_hrl, true).
 
 -define(DEBUG,  lager:debug).
 -define(INFO,   lager:info).
