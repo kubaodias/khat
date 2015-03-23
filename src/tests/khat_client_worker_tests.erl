@@ -25,6 +25,7 @@ khat_client_worker_test_() ->
         fun() ->
             ?MOCK(khat_group, [{subscribe, fun(_GroupName) -> ok end},
                                {broadcast, fun(_GroupName, _Data) -> ok end}]),
+            ?MOCK(calendar, [{now_to_local_time, fun(_Now) -> calendar:now_to_universal_time({0,0,0}) end}]),
             {ok, PID} = khat_client_worker:start_link(socket, ?DEFAULT_INACTIVITY_TIMEOUT),
             true = register(?CLIENT, PID),
             ok = send(<<"\\register\\client_name\r\n">>),
@@ -37,11 +38,12 @@ khat_client_worker_test_() ->
             ?UNMOCK()
         end,
         [
-            {"Single message test", fun() -> single_message_eunit() end},
-            {"Multiple messages test", fun() -> multiple_messages_eunit() end},
-            {"Multiple messages streamed test", fun() -> multiple_messages_streamed_eunit() end},
-            {"Message split test", fun() -> message_split_eunit() end},
-            {"Next message split test", fun() -> next_message_split_eunit() end}
+            {"Single message", fun() -> single_message_eunit() end},
+            {"Multiple messages", fun() -> multiple_messages_eunit() end},
+            {"Multiple messages streamed", fun() -> multiple_messages_streamed_eunit() end},
+            {"Message split", fun() -> message_split_eunit() end},
+            {"Next message split", fun() -> next_message_split_eunit() end},
+            {"Empty message is not broadcasted", fun() -> empty_message_eunit() end}
         ]}.
 
 single_message_eunit() ->
@@ -69,6 +71,10 @@ next_message_split_eunit() ->
     ok = send(<<" line\r\n">>),
     ok = assert_received([<<"Second line\r\n">>]).
 
+empty_message_eunit() ->
+    ok = send(<<"\r\n">>),
+    ok = assert_received([]).
+
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
@@ -84,7 +90,7 @@ synchronize_client_worker() ->
 assert_received(ExpectedData) ->
     ok = synchronize_client_worker(),
     Data = [BroadcastData || {_Pid, {khat_group, broadcast, [?GLOBAL_GROUP, BroadcastData]}, ok} <- meck:history(khat_group)],
-    ?assertEqual([<<"client_name: ", ExpData/binary>> || ExpData <- ExpectedData], Data),
+    ?assertEqual([<<"1970-01-01,00:00:00 client_name: ", ExpData/binary>> || ExpData <- ExpectedData], Data),
     ok = meck:reset(khat_group).
 
 -endif.

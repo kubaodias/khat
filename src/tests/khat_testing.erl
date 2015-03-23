@@ -33,7 +33,7 @@ looper(Fun, Sleep, Count) ->
     end.
 
 mock(Module, Functions) ->
-    ok = meck:new(Module),
+    ok = meck:new(Module, [unstick, passthrough]),
     mock_functions(Module, Functions).
 
 unmock() ->

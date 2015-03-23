@@ -159,7 +159,7 @@ handle_info(inactivity_timeout, State) ->
     State :: #khat_client{}) -> term()).
 terminate({shutdown, Reason}, State) when (Reason =:= tcp_closed) orelse (Reason =:= inactivity_timeout) ->
     #khat_client{name = ClientName} = State,
-    ?DEBUG("Client ~s terminating with ~p reason", [ClientName, Reason]),
+    ?INFO("Client ~s terminating with ~p reason", [ClientName, Reason]),
     ok;
 terminate(Reason, State) ->
     #khat_client{name = ClientName} = State,
@@ -194,6 +194,11 @@ schedule_timeout(State) ->
     NewState = State#khat_client{timer_ref = TRef},
     {ok, NewState}.
 
+-spec broadcast_msg(GroupName :: khat_group_name(), ClientName :: khat_client_name(), Msg :: iolist()) -> ok.
+broadcast_msg(GroupName, ClientName, Msg) ->
+    {Date, Time} = lager_util:format_time(calendar:now_to_local_time(erlang:now())),
+    khat_group:broadcast(GroupName, list_to_binary([Date, ",", Time, " ", ClientName, ": ", Msg, "\r\n"])).
+
 -spec process_data(State :: #khat_client{}) -> {ok, #khat_client{}}.
 process_data(State) when State#khat_client.buffer =:= <<>> ->
     {ok, State};
@@ -216,32 +221,35 @@ process_messages([], State) ->
 process_messages([BinMsg | RestOfMsgs], State) ->
     #khat_client{name = ClientName, socket = Socket} = State,
     Msg = binary_to_list(BinMsg),
-    NewState =
+    {ok, NewState} =
         case khat_protocol:parse_msg(Msg) of
             {register, NewClientName} ->
                 ?INFO("Register name ~s", [NewClientName]),
-                State#khat_client{name = NewClientName};
+                {ok, State#khat_client{name = NewClientName}};
             {subscribe, GroupName} ->
                 ok = khat_group:subscribe(GroupName),
-                State;
+                schedule_timeout(State);
             {unsubscribe, GroupName} ->
                 ok = khat_group:unsubscribe(GroupName),
-                State;
+                schedule_timeout(State);
+            {_, ""} when ClientName =:= undefined ->
+                {ok, State};
             {_, _GroupMsg} when ClientName =:= undefined ->
                 _ = gen_tcp:send(Socket, <<"Unregistered\r\n">>),
-                State;
+                {ok, State};
+            {msg, ""} ->
+                schedule_timeout(State);
             {msg, Msg} ->
-                ok = khat_group:broadcast(?GLOBAL_GROUP, list_to_binary([ClientName, ": ", Msg, "\r\n"])),
-                State;
+                ok = broadcast_msg(?GLOBAL_GROUP, ClientName, Msg),
+                schedule_timeout(State);
             {{group, Group}, GroupMsg} ->
-                ok = khat_group:broadcast(Group, list_to_binary([ClientName, ": ", GroupMsg, "\r\n"])),
-                State;
+                ok = broadcast_msg(Group, ClientName, GroupMsg),
+                schedule_timeout(State);
             {alive, _} ->
-                {ok, StateWithTimerScheduled} = schedule_timeout(State),
-                StateWithTimerScheduled;
+                schedule_timeout(State);
             error ->
                 ?ERROR("~s - received invalid message ~s", [ClientName, Msg]),
                 _ = gen_tcp:send(Socket, <<"Invalid command\r\n">>),
-                State
+                {ok, State}
         end,
     process_messages(RestOfMsgs, NewState).
