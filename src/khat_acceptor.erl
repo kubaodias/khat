@@ -61,8 +61,9 @@ start_link() ->
     {stop, Reason :: term()} | ignore).
 init([]) ->
     {ok, ListenSocket} = khat_listener:get_socket(),
+    ClientInactivityTimeout = khat_config:get_value(inactivity_timeout, ?DEFAULT_INACTIVITY_TIMEOUT) * 1000,
     ok = accept_connections(),
-    {ok, #khat_acceptor{listen_socket = ListenSocket}}.
+    {ok, #khat_acceptor{listen_socket = ListenSocket, client_inactivity_timeout = ClientInactivityTimeout}}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -94,14 +95,14 @@ handle_call(_Request, _From, State) ->
     {noreply, NewState :: #khat_acceptor{}, timeout() | hibernate} |
     {stop, Reason :: term(), NewState :: #khat_acceptor{}}).
 handle_cast(accept, State) ->
-    #khat_acceptor{listen_socket = ListenSocket} = State,
+    #khat_acceptor{listen_socket = ListenSocket, client_inactivity_timeout = ClientInactivityTimeout} = State,
     case gen_tcp:accept(ListenSocket) of
         {ok, Socket} ->
             {ok, PeerName} = inet:peername(Socket),
             ?DEBUG("Accepted connection from client ~p", [PeerName]),
             % it isn't necessary to start client worker under the supervisor - it isn't restarted
             %% {ok, Pid} = khat_client_sup:add_child(Socket),
-            {ok, Pid} = khat_client_worker:start(Socket),
+            {ok, Pid} = khat_client_worker:start(Socket, ClientInactivityTimeout),
             ok = gen_tcp:controlling_process(Socket, Pid),
             ok = inet:setopts(Socket, [{active, true}]),
             ok = accept_connections(),

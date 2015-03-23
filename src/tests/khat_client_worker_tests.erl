@@ -25,7 +25,7 @@ khat_client_worker_test_() ->
         fun() ->
             ?MOCK(khat_group, [{subscribe, fun(_GroupName) -> ok end},
                                {broadcast, fun(_GroupName, _Data) -> ok end}]),
-            {ok, PID} = khat_client_worker:start_link(socket),
+            {ok, PID} = khat_client_worker:start_link(socket, ?DEFAULT_INACTIVITY_TIMEOUT),
             true = register(?CLIENT, PID),
             ok = send(<<"\\register\\client_name\r\n">>),
             ok = synchronize_client_worker(),

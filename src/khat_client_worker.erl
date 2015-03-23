@@ -15,8 +15,8 @@
 
 %% API
 -export([
-    start_link/1,
-    start/1,
+    start_link/2,
+    start/2,
     stop/1,
     send/2
 ]).
@@ -41,15 +41,15 @@
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec(start_link(Socket :: port()) ->
+-spec(start_link(Socket :: port(), InactivityTimeout :: pos_integer()) ->
     {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
-start_link(Socket) ->
-    gen_server:start_link(?MODULE, [Socket], []).
+start_link(Socket, InactivityTimeout) ->
+    gen_server:start_link(?MODULE, [Socket, InactivityTimeout], []).
 
--spec(start(Socket :: port()) ->
+-spec(start(Socket :: port(), InactivityTimeout :: pos_integer()) ->
     {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
-start(Socket) ->
-    gen_server:start(?MODULE, [Socket], []).
+start(Socket, InactivityTimeout) ->
+    gen_server:start(?MODULE, [Socket, InactivityTimeout], []).
 
 -spec stop(Pid :: pid()) -> ok.
 stop(Pid) ->
@@ -77,10 +77,10 @@ send(Pid, Data) ->
 -spec(init(Args :: term()) ->
     {ok, State :: #khat_client{}} | {ok, State :: #khat_client{}, timeout() | hibernate} |
     {stop, Reason :: term()} | ignore).
-init([Socket]) ->
+init([Socket, InactivityTimeout]) ->
     ok = khat_group:subscribe(?GLOBAL_GROUP),
-    State = #khat_client{socket = Socket},
-    {ok, State}.
+    State = #khat_client{socket = Socket, inactivity_timeout = InactivityTimeout},
+    schedule_timeout(State).
 
 %%--------------------------------------------------------------------
 %% @private
@@ -140,7 +140,9 @@ handle_info({tcp, _Socket, Data}, State) ->
     {ok, NewState} = process_data(State#khat_client{buffer = <<PrevData/binary, Data/binary>>}),
     {noreply, NewState};
 handle_info({tcp_closed, _Socket}, State) ->
-    {stop, {shutdown, tcp_closed}, State}.
+    {stop, {shutdown, tcp_closed}, State};
+handle_info(inactivity_timeout, State) ->
+    {stop, {shutdown, inactivity_timeout}, State}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -155,9 +157,9 @@ handle_info({tcp_closed, _Socket}, State) ->
 %%--------------------------------------------------------------------
 -spec(terminate(Reason :: (normal | shutdown | {shutdown, term()} | term()),
     State :: #khat_client{}) -> term()).
-terminate({shutdown, tcp_closed}, State) ->
+terminate({shutdown, Reason}, State) when (Reason =:= tcp_closed) orelse (Reason =:= inactivity_timeout) ->
     #khat_client{name = ClientName} = State,
-    ?DEBUG("Client ~s terminating with tcp_closed reason", [ClientName]),
+    ?DEBUG("Client ~s terminating with ~p reason", [ClientName, Reason]),
     ok;
 terminate(Reason, State) ->
     #khat_client{name = ClientName} = State,
@@ -181,6 +183,16 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+-spec schedule_timeout(State :: #khat_client{}) -> {ok, #khat_client{}}.
+schedule_timeout(#khat_client{timer_ref = TRef} = State) when TRef =/= undefined->
+    _ = erlang:cancel_timer(TRef),
+    schedule_timeout(State#khat_client{timer_ref = undefined});
+schedule_timeout(State) ->
+    #khat_client{inactivity_timeout = Timeout} = State,
+    TRef = erlang:send_after(Timeout, self(), inactivity_timeout),
+    NewState = State#khat_client{timer_ref = TRef},
+    {ok, NewState}.
 
 -spec process_data(State :: #khat_client{}) -> {ok, #khat_client{}}.
 process_data(State) when State#khat_client.buffer =:= <<>> ->
@@ -209,21 +221,24 @@ process_messages([BinMsg | RestOfMsgs], State) ->
             {register, NewClientName} ->
                 ?INFO("Register name ~s", [NewClientName]),
                 State#khat_client{name = NewClientName};
-            {subscribe, ChannelName} ->
-                ok = khat_group:subscribe(ChannelName),
+            {subscribe, GroupName} ->
+                ok = khat_group:subscribe(GroupName),
                 State;
-            {unsubscribe, ChannelName} ->
-                ok = khat_group:unsubscribe(ChannelName),
+            {unsubscribe, GroupName} ->
+                ok = khat_group:unsubscribe(GroupName),
                 State;
-            {_, _ChannelMsg} when ClientName =:= undefined ->
+            {_, _GroupMsg} when ClientName =:= undefined ->
                 _ = gen_tcp:send(Socket, <<"Unregistered\r\n">>),
                 State;
             {msg, Msg} ->
                 ok = khat_group:broadcast(?GLOBAL_GROUP, list_to_binary([ClientName, ": ", Msg, "\r\n"])),
                 State;
-            {{channel, Channel}, ChannelMsg} ->
-                ok = khat_group:broadcast(Channel, list_to_binary([ClientName, ": ", ChannelMsg, "\r\n"])),
+            {{group, Group}, GroupMsg} ->
+                ok = khat_group:broadcast(Group, list_to_binary([ClientName, ": ", GroupMsg, "\r\n"])),
                 State;
+            {alive, _} ->
+                {ok, StateWithTimerScheduled} = schedule_timeout(State),
+                StateWithTimerScheduled;
             error ->
                 ?ERROR("~s - received invalid message ~s", [ClientName, Msg]),
                 _ = gen_tcp:send(Socket, <<"Invalid command\r\n">>),

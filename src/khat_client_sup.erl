@@ -15,7 +15,7 @@
 %% API
 -export([
     start_link/0,
-    add_child/1
+    add_child/2
 ]).
 
 %% Supervisor callbacks
@@ -30,10 +30,10 @@
 start_link() ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
--spec add_child(Socket :: port()) -> {ok, Pid :: pid()} | ignore | {error, Reason :: term()}.
-add_child(Socket) ->
+-spec add_child(Socket :: port(), ClientInactivityTimeout :: pos_integer()) -> {ok, Pid :: pid()} | ignore | {error, Reason :: term()}.
+add_child(Socket, ClientInactivityTimeout) ->
     Id = khat_utils:get_timestamp(),
-    supervisor:start_child(?MODULE, {Id, {khat_client_worker, start_link, [Socket]},
+    supervisor:start_child(?MODULE, {Id, {khat_client_worker, start_link, [Socket, ClientInactivityTimeout]},
                                      transient, 10000, worker, [khat_client_worker]}).
 
 %% ===================================================================
