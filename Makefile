@@ -1,7 +1,10 @@
 NAME=khat
 
-all: compile release
+all: get_deps compile release
 	./rebar compile
+
+get_deps:
+	./rebar get-deps
 
 compile:
 	./rebar compile
