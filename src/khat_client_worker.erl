@@ -225,7 +225,18 @@ process_messages([BinMsg | RestOfMsgs], State) ->
         case khat_protocol:parse_msg(Msg) of
             {register, NewClientName} ->
                 ?INFO("Register name ~s", [NewClientName]),
-                {ok, State#khat_client{name = NewClientName}};
+                try
+                    true = register(khat_utils:list_to_atom(NewClientName), self()),
+                    {ok, State#khat_client{name = NewClientName}}
+                catch error:badarg when ClientName =:= undefined ->
+                    ?WARN("Another client with name ~s is already registered", [NewClientName]),
+                    _ = gen_tcp:send(Socket, <<"Already registered\r\n">>),
+                    {ok, State};
+                error:badarg ->
+                    ?WARN("Client is already registered with name ~s", [ClientName]),
+                    _ = gen_tcp:send(Socket, <<"Already registered\r\n">>),
+                    {ok, State}
+                end;
             {subscribe, GroupName} ->
                 ok = khat_group:subscribe(GroupName),
                 schedule_timeout(State);

@@ -15,7 +15,7 @@
 -include("../../include/khat_testing.hrl").
 
 %% Definitions
--define(CLIENT, khat_client).
+-define(CLIENT, client_name).
 
 %%%===================================================================
 %%% Test functions
@@ -27,9 +27,8 @@ khat_client_worker_test_() ->
                                {broadcast, fun(_GroupName, _Data) -> ok end}]),
             ?MOCK(calendar, [{now_to_local_time, fun(_Now) -> calendar:now_to_universal_time({0,0,0}) end}]),
             {ok, PID} = khat_client_worker:start_link(socket, ?DEFAULT_INACTIVITY_TIMEOUT),
-            true = register(?CLIENT, PID),
-            ok = send(<<"\\register\\client_name\r\n">>),
-            ok = synchronize_client_worker(),
+            ok = send(PID, <<"\\register\\client_name\r\n">>),
+            ok = synchronize_client_worker(PID),
             PID
         end,
         fun(PID) ->
@@ -80,11 +79,17 @@ empty_message_eunit() ->
 %%%===================================================================
 
 send(Data) ->
-    ?CLIENT ! {tcp, socket, Data},
+    send(?CLIENT, Data).
+
+send(Process, Data) ->
+    Process ! {tcp, socket, Data},
     ok.
 
 synchronize_client_worker() ->
-    _ = sys:get_status(?CLIENT),
+    synchronize_client_worker(?CLIENT).
+
+synchronize_client_worker(Process) ->
+    _ = sys:get_status(Process),
     ok.
 
 assert_received(ExpectedData) ->
