@@ -1,4 +1,6 @@
 # khat
+[![Build Status](https://img.shields.io/github/workflow/status/kubaodias/khat/Erlang%20CI)](https://github.com/kubaodias/khat/actions?query=workflow%3A%22Erlang+CI%22)
+
 Simple chat server with group subscriptions and registration of the clients.
 
 ## Developer guide
