@@ -3,7 +3,7 @@ Simple chat server with group subscriptions and registration of the clients.
 
 Overview
 --------
-Messages starting with a '\' character are special commands described in the commands section below. All other data sent from the client is broadcasted to all clients connected to the server.
+Messages starting with a `\` character are special commands described in the commands section below. All other data sent from the client is broadcasted to all clients connected to the server.
 
 Commands
 --------
