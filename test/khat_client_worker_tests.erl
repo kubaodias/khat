@@ -10,9 +10,9 @@
 -ifdef(TEST).
 
 %% Includes
--include("../../include/khat.hrl").
--include("../../include/khat_logger.hrl").
--include("../../include/khat_testing.hrl").
+-include("../include/khat.hrl").
+-include("../include/khat_logger.hrl").
+-include("../include/khat_testing.hrl").
 
 %% Definitions
 -define(CLIENT, client_name).

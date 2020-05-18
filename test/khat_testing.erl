@@ -27,7 +27,7 @@ looper(Fun, _Sleep, 0) ->
 looper(Fun, Sleep, Count) ->
     try
         Fun()
-    catch error:{assertEqual_failed,_} ->
+    catch error:{assertEqual,_} ->
         timer:sleep(Sleep),
         looper(Fun, Sleep, Count - 1)
     end.

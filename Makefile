@@ -1,31 +1,15 @@
 NAME=khat
-
-all: get_deps compile release
-	./rebar compile
-
-get_deps:
-	./rebar get-deps
+.PHONY: test clean
 
 compile:
-	./rebar compile
+	rebar3 compile
 
-release:
-	cd rel && ../rebar generate && cd -
-
-node:
-	(cd rel && ../rebar create-node nodeid=${NAME} && cd -)
-
-clean:
-	./rebar clean
-	rm -rf rel/${NAME}
+test:
+	rebar3 eunit -c
 
 run:
-	rel/${NAME}/bin/${NAME} start
+	rebar3 shell --apps khat --config sys.config
 
-stop:
-	rel/${NAME}/bin/${NAME} stop
-
-runconsole:
-	rel/${NAME}/bin/${NAME} console
-
-alldev: clean all runconsole
+clean:
+	rebar3 clean
+	rm -rf _builds
