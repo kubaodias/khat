@@ -38,27 +38,32 @@ telnet 127.0.0.1 6667
 ### Commands
 Messages starting with a `\` character are special commands described in the commands section below. All other data sent from the client is broadcasted to all clients connected to the server.
 
-Register client with a new name. When user is unregistered he can only receive messages but can't send any.
+#### Register client with a new name
+When user is unregistered then messages can only be received but not sent.
 ```erlang
 \register\Client Name
 ```
 
-Subscribe to a given group. Any messages sent to this group by any of the clients will be sent to the subscribed client.
+#### Subscribe to a given group
+Any messages sent to group `Group Name` in the example below by any of the clients will be sent to the subscribed client.
 ```erlang
 \subscribe\Group Name
 ```
 
-Unsubscribe from a given group. No more messages destined for this group will be sent to the client.
+#### Unsubscribe from a given group
+No more messages destined for this group will be sent to the client.
 ```erlang
 \unsubscribe\Group Name
 ```
 
-Send message to the given group. Only clients subscribed to this group will receive this message.
+#### Send message to the given group
+Only clients subscribed to this group will receive this message.
 ```erlang
 \group=Group Name\Some message
 ```
 
-Send a keepalive packet. If client isn't sending any messages he has to send keepalive packets in order to remain connected to the server.
+#### Send a keepalive packet
+If client isn't sending any messages then keepalive packets needs to be sent in order to remain connected to the server. If there's no data sent by the client within `inactivity_timeout` seconds then the client will be disconnected from the server.
 ```erlang
 \alive\
 ```
