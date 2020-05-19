@@ -33,12 +33,12 @@
     socket  :: port(),
     buffer = <<>>  :: binary(),
     inactivity_timeout :: pos_integer(),
-    timer_ref :: reference()
+    timer_ref :: reference() | undefined
 }).
 
 -record(khat_group, {
     name    :: khat_group_name(),
-    tab     :: ets:tid()
+    tab     :: ets:tid() | atom()
 }).
 
 
